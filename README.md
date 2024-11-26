@@ -45,7 +45,7 @@ print(predictions)
 
 
 ## Reference
-If you use MatterSim, please cite our preprint on [arXiv](https://arxiv.org/abs/2405.04967):
+We kindly request that users of MatterSim version 1.0.0 cite our preprint available on arXiv:
 ```
 @article{yang2024mattersim,
       title={MatterSim: A Deep Learning Atomistic Model Across Elements, Temperatures and Pressures}, 
@@ -58,6 +58,12 @@ If you use MatterSim, please cite our preprint on [arXiv](https://arxiv.org/abs/
       journal={arXiv preprint arXiv:2405.04967}
 }
 ```
+
+> [!IMPORTANT]
+> We kindly ask users to **explicitly** specify the exact model version and checkpoint (e.g., **MatterSim-v1.0.0-1M**) when reporting results in academic papers or technical reports, rather than referring to the model generically as **MatterSim**. Precise versioning is crucial for ensuring reproducibility. For instance, the statement "_This benchmark was conducted using MatterSim-v1.0.0-1M_" serves as a good example.
+
+## Limitations
+MatterSim is designed specifically for atomistic simulations of bulk materials. Applications or interpretations beyond this scope should be approached with caution. For instance, when using the model for simulations involving surfaces, interfaces, or properties influenced by long-range interactions, the results may be qualitatively accurate but are not suitable for quantitative analysis. In such cases, we recommend fine-tuning the model to better align with the specific application.
 
 ## Trademarks
 
