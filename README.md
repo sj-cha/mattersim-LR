@@ -1,6 +1,6 @@
 <h1>
 <p align="center">
-    <img src="docs/_static/mattersim-banner.jpg" alt="MatterSim logo" width="600"/>
+    <img src="docs/_static/mattersim-banner.png" alt="MatterSim logo" width="600"/>
 </p>
 </h1>
 
@@ -18,13 +18,13 @@ MatterSim is a deep learning atomistic model across elements, temperatures and p
 
 ## Installation
 ### Install from source code
-Requirements:
-- Python == 3.9
+> [!WARNING]
+> We strongly recommend that users install MatterSim using [mamba or micromamba](https://mamba.readthedocs.io/en/latest/index.html), because *conda* can be significantly slower when resolving the dependencies in environment.yaml.
 
 To install the package, run the following command under the root of the folder:
 ```bash
-conda env create -f environment.yaml
-conda activate mattersim
+mamba env create -f environment.yaml
+mamba activate mattersim
 pip install -e .
 python setup.py build_ext --inplace
 ```
@@ -32,13 +32,18 @@ python setup.py build_ext --inplace
 ## Usage
 ### A minimal test
 ```python
+import torch
+from ase.build import bulk
 from mattersim.forcefield.potential import Potential
 from mattersim.datasets.utils.build import build_dataloader
 
-potential = Potential.load(load_path="/path/to/checkpoint", device="cuda:0")
-from ase.build import bulk
+device = "cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"
+print(f"Running MatterSim on {device}")
+
+potential = Potential.load(load_path="pretrained_models/mattersim-v1.0.0-1M.pth", device=device)
 si = bulk("Si", "diamond", a=5.43)
-dataloader = build_dataloader([si], only_inference=True, model_type=model_name)
+dataloader = build_dataloader([si], only_inference=True)
+
 predictions = potential.predict_properties(dataloader, include_forces=True, include_stresses=True)
 print(predictions)
 ```
