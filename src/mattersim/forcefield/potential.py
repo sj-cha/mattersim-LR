@@ -990,7 +990,7 @@ def batch_to_dict(graph_batch, model_type="m3gnet", device="cuda"):
     return input
 
 
-class DeepCalculator(Calculator):
+class MatterSimCalculator(Calculator):
     """
     Deep calculator based on ase Calculator
     """
@@ -999,7 +999,7 @@ class DeepCalculator(Calculator):
 
     def __init__(
         self,
-        potential: Potential,
+        potential: Potential = None,
         args_dict: dict = {},
         compute_stress: bool = True,
         stress_weight: float = GPa,
@@ -1014,11 +1014,43 @@ class DeepCalculator(Calculator):
             **kwargs:
         """
         super().__init__(**kwargs)
-        self.potential = potential
+        if potential is None:
+            self.potential = Potential.load()
+        else:
+            self.potential = potential
         self.compute_stress = compute_stress
         self.stress_weight = stress_weight
         self.args_dict = args_dict
         self.device = device
+
+    @staticmethod
+    def load(
+        load_path: str = None,
+        *,
+        model_name: str = "m3gnet",
+        device: str = "cuda" if torch.cuda.is_available() else "cpu",
+        args: Dict = None,
+        load_training_state: bool = True,
+        args_dict: dict = {},
+        compute_stress: bool = True,
+        stress_weight: float = GPa,
+        **kwargs,
+    ):
+        potential = Potential.load(
+            load_path=load_path,
+            model_name=model_name,
+            device=device,
+            args=args,
+            load_training_state=load_training_state,
+        )
+        return MatterSimCalculator(
+            potential=potential,
+            args_dict=args_dict,
+            compute_stress=compute_stress,
+            stress_weight=stress_weight,
+            device=device,
+            **kwargs,
+        )
 
     def calculate(
         self,
