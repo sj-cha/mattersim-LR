@@ -485,6 +485,9 @@ class Potential(nn.Module):
             - results[1] (list[np.ndarray]): a list of atomic forces
             - results[2] (list[np.ndarray]): a list of stresses
         """
+        logger.warning(
+            "The unit of stress is GPa when using the predict_properties function."
+        )
         self.model.eval()
         energies = []
         forces = []
