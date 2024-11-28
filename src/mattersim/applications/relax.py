@@ -7,6 +7,7 @@ from ase.constraints import Filter, FixSymmetry
 from ase.filters import ExpCellFilter, FrechetCellFilter
 from ase.optimize import BFGS, FIRE
 from ase.optimize.optimize import Optimizer
+from ase.units import GPa
 
 
 class Relaxer(object):
@@ -53,7 +54,7 @@ class Relaxer(object):
         steps: int = 500,
         fmax: float = 0.01,
         params_filter: dict = {},
-        **kwargs
+        **kwargs,
     ) -> Atoms:
         """
         Relax the atoms object.
@@ -115,7 +116,7 @@ class Relaxer(object):
         constrain_symmetry: bool = False,
         fix_axis: Union[bool, Iterable[bool]] = False,
         pressure_in_GPa: Union[float, None] = None,
-        **kwargs
+        **kwargs,
     ) -> Union[Tuple[bool, Atoms], Tuple[List[bool], List[Atoms]]]:
         """
         Args:
@@ -138,11 +139,15 @@ class Relaxer(object):
             pass
         elif filter is None and pressure_in_GPa is not None:
             filter = "ExpCellFilter"
-            params_filter["scalar_pressure"] = pressure_in_GPa / 160.21766208
+            params_filter["scalar_pressure"] = (
+                pressure_in_GPa * GPa
+            )  # GPa = 1 / 160.21766208
         elif filter is not None and pressure_in_GPa is None:
             params_filter["scalar_pressure"] = 0.0
         else:
-            params_filter["scalar_pressure"] = pressure_in_GPa / 160.21766208
+            params_filter["scalar_pressure"] = (
+                pressure_in_GPa * GPa
+            )  # GPa = / 160.21766208
 
         relaxer = Relaxer(
             optimizer=optimizer,
