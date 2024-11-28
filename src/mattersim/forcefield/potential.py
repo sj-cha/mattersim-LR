@@ -90,7 +90,7 @@ class Potential(nn.Module):
             self.ema = ema
         self.model_name = kwargs.get("model_name", "m3gnet")
         self.validation_metrics = kwargs.get(
-            "validation_metrics", {"loss": 10000.0}  # noqa: E501
+            "validation_metrics", {"loss": 10000000.0}  # noqa: E501
         )
         self.last_epoch = kwargs.get("last_epoch", -1)
         self.description = kwargs.get("description", "")
@@ -192,9 +192,6 @@ class Potential(nn.Module):
         save_checkpoint: bool = False,
         save_path: str = "./results/",
         ckpt_interval: int = 10,
-        multi_head: bool = False,
-        dataset_name_list: List[str] = None,
-        sampler=None,
         is_distributed: bool = False,
         need_to_load_data: bool = False,
         **kwargs,
@@ -234,59 +231,40 @@ class Potential(nn.Module):
         )
         for epoch in range(self.last_epoch + 1, epochs):
             print(f"Epoch: {epoch} / {epochs}")
-            if not multi_head:
-                if need_to_load_data:
-                    assert isinstance(dataloader, list)
-                    random.Random(kwargs.get("seed", 42) + epoch).shuffle(  # noqa: E501
-                        dataloader
+            if need_to_load_data:
+                assert isinstance(dataloader, list)
+                random.Random(kwargs.get("seed", 42) + epoch).shuffle(  # noqa: E501
+                    dataloader
+                )
+                for idx, data_path in enumerate(dataloader):
+                    with open(data_path, "rb") as f:
+                        start = time.time()
+                        train_data = pickle.load(f)
+                    print(
+                        f"TRAIN: loading {data_path.split('/')[-2]}"
+                        f"/{data_path.split('/')[-1]} dataset with "
+                        f"{len(train_data)} data points, "
+                        f"{len(train_data)} data points in total, "
+                        f"time: {time.time() - start}"  # noqa: E501
                     )
-                    for idx, data_path in enumerate(dataloader):
-                        with open(data_path, "rb") as f:
-                            start = time.time()
-                            train_data = pickle.load(f)
-                        print(
-                            f"TRAIN: loading {data_path.split('/')[-2]}"
-                            f"/{data_path.split('/')[-1]} dataset with "
-                            f"{len(train_data)} data points, "
-                            f"{len(train_data)} data points in total, "
-                            f"time: {time.time() - start}"  # noqa: E501
-                        )
-                        # Distributed Sampling
-                        atoms_train_sampler = (
-                            torch.utils.data.distributed.DistributedSampler(
-                                train_data,
-                                seed=kwargs.get("seed", 42)
-                                + idx * 131
-                                + epoch,  # noqa: E501
-                            )
-                        )
-                        train_dataloader = DataLoader(
+                    # Distributed Sampling
+                    atoms_train_sampler = (
+                        torch.utils.data.distributed.DistributedSampler(
                             train_data,
-                            batch_size=kwargs.get("batch_size", 32),
-                            shuffle=(atoms_train_sampler is None),
-                            num_workers=0,
-                            sampler=atoms_train_sampler,
+                            seed=kwargs.get("seed", 42)
+                            + idx * 131
+                            + epoch,  # noqa: E501
                         )
-                        self.train_one_epoch(
-                            train_dataloader,
-                            epoch,
-                            loss,
-                            include_energy,
-                            include_forces,
-                            include_stresses,
-                            force_loss_ratio,
-                            stress_loss_ratio,
-                            wandb,
-                            is_distributed,
-                            mode="train",
-                            **kwargs,
-                        )
-                        del train_dataloader
-                        del train_data
-                        torch.cuda.empty_cache()
-                else:
+                    )
+                    train_dataloader = DataLoader(
+                        train_data,
+                        batch_size=kwargs.get("batch_size", 32),
+                        shuffle=(atoms_train_sampler is None),
+                        num_workers=0,
+                        sampler=atoms_train_sampler,
+                    )
                     self.train_one_epoch(
-                        dataloader,
+                        train_dataloader,
                         epoch,
                         loss,
                         include_energy,
@@ -299,8 +277,12 @@ class Potential(nn.Module):
                         mode="train",
                         **kwargs,
                     )
-                metric = self.train_one_epoch(
-                    val_dataloader,
+                    del train_dataloader
+                    del train_data
+                    torch.cuda.empty_cache()
+            else:
+                self.train_one_epoch(
+                    dataloader,
                     epoch,
                     loss,
                     include_energy,
@@ -310,42 +292,23 @@ class Potential(nn.Module):
                     stress_loss_ratio,
                     wandb,
                     is_distributed,
-                    mode="val",
-                    **kwargs,
-                )
-            else:
-                assert dataset_name_list is not None
-                assert (
-                    need_to_load_data is False
-                ), "load_training_data is not supported for multi-head training"  # noqa: E501
-                self.train_one_epoch_multi_head(
-                    dataloader,
-                    dataset_name_list,
-                    epoch,
-                    loss,
-                    include_energy,
-                    include_forces,
-                    include_stresses,
-                    force_loss_ratio,
-                    stress_loss_ratio,
-                    wandb,
                     mode="train",
                     **kwargs,
                 )
-                metric = self.train_one_epoch_multi_head(
-                    val_dataloader,
-                    dataset_name_list,
-                    epoch,
-                    loss,
-                    include_energy,
-                    include_forces,
-                    include_stresses,
-                    force_loss_ratio,
-                    stress_loss_ratio,
-                    wandb,
-                    mode="val",
-                    **kwargs,
-                )
+            metric = self.train_one_epoch(
+                val_dataloader,
+                epoch,
+                loss,
+                include_energy,
+                include_forces,
+                include_stresses,
+                force_loss_ratio,
+                stress_loss_ratio,
+                wandb,
+                is_distributed,
+                mode="val",
+                **kwargs,
+            )
 
             if isinstance(self.scheduler, ReduceLROnPlateau):
                 self.scheduler.step(metric)
@@ -361,7 +324,7 @@ class Potential(nn.Module):
                 "MAE_stress": metric[3],
             }
             if is_distributed:
-                # TODO 添加distributed训练早停
+                # TODO add distributed early stopping
                 if self.save_model_ddp(
                     epoch,
                     early_stop_patience,
@@ -373,7 +336,6 @@ class Potential(nn.Module):
                 ):
                     break
             else:
-                # return True时为早停
                 if self.save_model(
                     epoch,
                     early_stop_patience,
@@ -478,39 +440,24 @@ class Potential(nn.Module):
         include_forces: bool = False,
         include_stresses: bool = False,
         wandb=None,
-        multi_head: bool = False,
         **kwargs,
     ):
         """
         Test model performance on a given dataset
         """
-        if not multi_head:
-            return self.train_one_epoch(
-                val_dataloader,
-                1,
-                loss,
-                include_energy,
-                include_forces,
-                include_stresses,
-                1.0,
-                0.1,
-                wandb=wandb,
-                mode="val",
-            )
-        else:
-            return self.train_one_epoch_multi_head(
-                val_dataloader,
-                kwargs["dataset_name_list"],
-                1,
-                loss,
-                include_energy,
-                include_forces,
-                include_stresses,
-                1.0,
-                0.1,
-                wandb=wandb,
-                mode="val",
-            )
+        return self.train_one_epoch(
+            val_dataloader,
+            1,
+            loss,
+            include_energy,
+            include_forces,
+            include_stresses,
+            1.0,
+            0.1,
+            wandb=wandb,
+            mode="val",
+            **kwargs,
+        )
 
     def predict_properties(
         self,
@@ -685,153 +632,6 @@ class Potential(nn.Module):
 
         if mode == "val":
             return (loss_avg_, e_mae, f_mae, s_mae)
-
-    def train_one_epoch_multi_head(
-        self,
-        dataloader_list,
-        dataset_name_list,
-        epoch,
-        loss,
-        include_energy=True,
-        include_forces=False,
-        include_stresses=False,
-        loss_f=1.0,
-        loss_s=0.1,
-        wandb=None,
-        mode="train",
-        **kwargs,
-    ):
-        start_time = time.time()
-
-        metrics = {}
-        for dataset_name in dataset_name_list:
-            metrics_ = {}
-            metrics_["loss_avg"] = MeanMetric().to(self.device)
-            metrics_["train_e_mae"] = MeanMetric().to(self.device)
-            metrics_["train_f_mae"] = MeanMetric().to(self.device)
-            metrics_["train_s_mae"] = MeanMetric().to(self.device)
-            metrics[dataset_name] = metrics_
-
-        dataloader_iter = [
-            dataloader.__iter__() for dataloader in dataloader_list  # noqa: E501
-        ]
-        if mode == "train":
-            self.model.train()
-        elif mode == "val":
-            self.model.eval()
-
-        dataloader_len = [len(dataloader) for dataloader in dataloader_list]
-        for i in range(1, len(dataloader_len)):
-            dataloader_len[i] += dataloader_len[i - 1]
-        idx_list = list(range(dataloader_len[-1]))
-        random.shuffle(idx_list)
-
-        for idx in idx_list:
-            for dataset_idx, bound in enumerate(dataloader_len):
-                if idx < bound:
-                    break
-
-            graph_batch = dataloader_iter[dataset_idx].__next__()
-            graph_batch.to(self.device)
-            input = batch_to_dict(graph_batch)
-            dataset_name = dataset_name_list[dataset_idx]
-
-            if mode == "train":
-                result = self.forward(
-                    input,
-                    include_forces=include_forces,
-                    include_stresses=include_stresses,
-                    dataset_idx=dataset_idx,
-                )
-            elif mode == "val":
-                with self.ema.average_parameters():
-                    result = self.forward(
-                        input,
-                        include_forces=include_forces,
-                        include_stresses=include_stresses,
-                        dataset_idx=dataset_idx,
-                    )
-
-            loss_, e_mae, f_mae, s_mae = self.loss_calc(
-                graph_batch,
-                result,
-                loss,
-                include_energy,
-                include_forces,
-                include_stresses,
-                loss_f,
-                loss_s,
-            )
-
-            # loss backward
-            if mode == "train":
-                self.optimizer.zero_grad()
-                loss_.backward()
-                nn.utils.clip_grad_norm_(
-                    self.model.parameters(), 1.0, norm_type=2  # noqa: E501
-                )
-                self.optimizer.step()
-                self.ema.update()
-
-            metrics[dataset_name]["loss_avg"].update(loss_.detach())
-            if include_energy:
-                metrics[dataset_name]["train_e_mae"].update(e_mae.detach())
-            if include_forces:
-                metrics[dataset_name]["train_f_mae"].update(f_mae.detach())
-            if include_stresses:
-                metrics[dataset_name]["train_s_mae"].update(s_mae.detach())
-
-        loss_all = 0
-        e_mae = 0
-        f_mae = 0
-        s_mae = 0
-        for dataset_name in dataset_name_list:
-            train_f_mae = train_s_mae = 0
-            loss_avg = metrics[dataset_name]["loss_avg"].compute().item()
-            loss_all += loss_avg
-            if include_energy:
-                train_e_mae = metrics[dataset_name]["train_e_mae"].compute().item()
-                e_mae += train_e_mae
-            if include_forces and (dataset_name != "QM9"):
-                train_f_mae = (
-                    metrics[dataset_name]["train_f_mae"].compute().item()
-                )  # noqa: E501
-                f_mae += train_f_mae
-            if include_stresses:
-                train_s_mae = (
-                    metrics[dataset_name]["train_s_mae"].compute().item()
-                )  # noqa: E501
-                s_mae += train_s_mae
-
-            print(
-                "%s %s: Loss: %.4f, MAE(e): %.4f, MAE(f): %.4f, MAE(s): %.4f, Time: %.2fs"  # noqa: E501
-                % (
-                    dataset_name,
-                    mode,
-                    loss_avg,
-                    train_e_mae,
-                    train_f_mae,
-                    train_s_mae,
-                    time.time() - start_time,
-                )
-            )
-
-            if wandb:
-                wandb.log(
-                    {
-                        f"{dataset_name}/{mode}_loss": loss_avg,
-                        f"{dataset_name}/{mode}_mae_e": train_e_mae,
-                        f"{dataset_name}/{mode}_mae_f": train_f_mae,
-                        f"{dataset_name}/{mode}_mae_s": train_s_mae,
-                    },
-                    step=epoch,
-                )
-
-        if wandb:
-            wandb.log({"lr": self.scheduler.get_last_lr()[0]}, step=epoch)
-
-        if mode == "val":
-            return (loss_all, e_mae, f_mae, s_mae)
 
     def loss_calc(
         self,
@@ -1128,23 +928,6 @@ class Potential(nn.Module):
             **kwargs,
         )
 
-    def load_model(self, **kwargs):
-        warnings.warn(
-            "The interface of loading M3GNet model has been deprecated. "
-            "Please use Potential.load() instead.",
-            DeprecationWarning,
-        )
-        warnings.warn(
-            "It only supports loading the pre-trained M3GNet model. "
-            "For other models, please use Potential.load() instead."
-        )
-        current_dir = os.path.dirname(__file__)
-        load_path = os.path.join(
-            current_dir, "m3gnet/pretrained/mpf/best_model.pth"  # noqa: E501
-        )
-        checkpoint = torch.load(load_path)
-        self.model.load_state_dict(checkpoint["model"])
-
     def set_description(self, description):
         self.description = description
 
@@ -1203,7 +986,7 @@ class DeepCalculator(Calculator):
         potential: Potential,
         args_dict: dict = {},
         compute_stress: bool = True,
-        stress_weight: float = 1.0,
+        stress_weight: float = 1/160.21766208,
         device: str = "cuda" if torch.cuda.is_available() else "cpu",
         **kwargs,
     ):
