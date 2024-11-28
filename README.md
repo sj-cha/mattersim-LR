@@ -40,7 +40,7 @@ from mattersim.datasets.utils.build import build_dataloader
 device = "cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"
 print(f"Running MatterSim on {device}")
 
-potential = Potential.load(load_path="pretrained_models/mattersim-v1.0.0-1M.pth", device=device)
+potential = Potential.load()
 si = bulk("Si", "diamond", a=5.43)
 dataloader = build_dataloader([si], only_inference=True)
 
@@ -53,7 +53,7 @@ print(predictions)
 We kindly request that users of MatterSim version 1.0.0 cite our preprint available on arXiv:
 ```
 @article{yang2024mattersim,
-      title={MatterSim: A Deep Learning Atomistic Model Across Elements, Temperatures and Pressures}, 
+      title={MatterSim: A Deep Learning Atomistic Model Across Elements, Temperatures and Pressures},
       author={Han Yang and Chenxi Hu and Yichi Zhou and Xixian Liu and Yu Shi and Jielan Li and Guanzhi Li and Zekun Chen and Shuizhou Chen and Claudio Zeni and Matthew Horton and Robert Pinsler and Andrew Fowler and Daniel Zügner and Tian Xie and Jake Smith and Lixin Sun and Qian Wang and Lingyu Kong and Chang Liu and Hongxia Hao and Ziheng Lu},
       year={2024},
       eprint={2405.04967},
