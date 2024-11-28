@@ -9,6 +9,7 @@ import time
 import warnings
 from typing import Dict, List, Optional
 
+import logging
 import numpy as np
 import torch
 import torch.distributed
@@ -26,6 +27,15 @@ from mattersim.datasets.utils.build import build_dataloader
 from mattersim.forcefield.m3gnet.m3gnet import M3Gnet
 from mattersim.jit_compile_tools.jit import compile_mode
 
+rank = int(os.getenv("RANK", 0))
+
+if rank == 0:
+    logging.basicConfig(
+        level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+    )
+else:
+    logging.basicConfig(level=logging.CRITICAL)
+logger = logging.getLogger(__name__)
 
 @compile_mode("script")
 class Potential(nn.Module):
@@ -109,11 +119,11 @@ class Potential(nn.Module):
         Freeze the model in the fine-tuning process
         """
         if finetune_layers == -1:
-            print("fine-tuning all layers")
+            logger.info("fine-tuning all layers")
         elif finetune_layers >= 0 and finetune_layers < len(
             self.model.node_head.unified_encoder_layers
         ):
-            print(f"fine-tuning the last {finetune_layers} layers")
+            logger.info(f"fine-tuning the last {finetune_layers} layers")
             for name, param in self.model.named_parameters():
                 param.requires_grad = False
 
@@ -164,11 +174,13 @@ class Potential(nn.Module):
         reset_head_for_finetune: whether to reset the original head
         """
         if self.model_name not in ["graphormer", "geomformer"]:
-            print("Only graphormer and geomformer support freezing layers")
+            logger.warning("Only graphormer and geomformer support freezing layers")
             return
         self.model.finetune_mode = True
         if finetune_head is None:
-            print("No finetune head is provided, using the original energy head")
+            logger.info(
+        "No finetune head is provided, using the original energy head"
+        )
         self.model.finetune_head = finetune_head
         self.model.finetune_task_mean = finetune_task_mean
         self.model.finetune_task_std = finetune_task_std
@@ -226,11 +238,11 @@ class Potential(nn.Module):
         )
         if is_distributed:
             self.rank = torch.distributed.get_rank()
-        print(
+        logger.info(
             f"Number of trainable parameters: {sum(p.numel() for p in self.model.parameters() if p.requires_grad):,}"  # noqa: E501
         )
         for epoch in range(self.last_epoch + 1, epochs):
-            print(f"Epoch: {epoch} / {epochs}")
+            logger.info(f"Epoch: {epoch} / {epochs}")
             if need_to_load_data:
                 assert isinstance(dataloader, list)
                 random.Random(kwargs.get("seed", 42) + epoch).shuffle(  # noqa: E501
@@ -240,7 +252,7 @@ class Potential(nn.Module):
                     with open(data_path, "rb") as f:
                         start = time.time()
                         train_data = pickle.load(f)
-                    print(
+                    logger.info(
                         f"TRAIN: loading {data_path.split('/')[-2]}"
                         f"/{data_path.split('/')[-1]} dataset with "
                         f"{len(train_data)} data points, "
@@ -382,7 +394,7 @@ class Potential(nn.Module):
                 ):
                     self.save(os.path.join(save_path, "best_model.pth"))
                 if epoch > best_model["last_epoch"] + early_stop_patience:
-                    print("Early stopping")
+                    logger.info("Early stopping")
                     return True
                 del best_model
             except BaseException:
@@ -603,7 +615,7 @@ class Potential(nn.Module):
             s_mae = 0
 
         if log:
-            print(
+            logger.info(
                 "%s: Loss: %.4f, MAE(e): %.4f, MAE(f): %.4f, MAE(s): %.4f, Time: %.2fs, lr: %.8f\n"  # noqa: E501
                 % (
                     mode,
@@ -614,7 +626,6 @@ class Potential(nn.Module):
                     time.time() - start_time,
                     self.scheduler.get_last_lr()[0],
                 ),
-                end="",
             )
 
         if wandb and ((not is_distributed) or self.rank == 0):
@@ -855,7 +866,7 @@ class Potential(nn.Module):
             load_path = os.path.join(
                 current_dir, "..", "pretrained_models/mattersim-v1.0.0-1M.pth"
             )
-            print(f"Loading the pre-trained {os.path.basename(load_path)} model")
+            logger.info(f"Loading the pre-trained {os.path.basename(load_path)} model")
         elif (
             load_path.lower() == "mattersim-v1.0.0-5m.pth"
             or load_path.lower() == "mattersim-v1.0.0-5m"
@@ -864,7 +875,7 @@ class Potential(nn.Module):
                 current_dir, "..", "pretrained_models/mattersim-v1.0.0-5M.pth"
             )
         else:
-            print("Loading the model from %s" % load_path)
+            logger.info("Loading the model from %s" % load_path)
         assert os.path.exists(load_path), f"Model file {load_path} not found"
 
         checkpoint = torch.load(load_path, map_location=device)
