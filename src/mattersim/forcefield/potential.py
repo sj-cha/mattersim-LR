@@ -821,7 +821,9 @@ class Potential(nn.Module):
                     output["forces"] = forces
 
                 if stress_grad is not None:
-                    stresses = 1 / volume[:, None, None] * stress_grad * 160.21766208
+                    stresses = (
+                        1 / volume[:, None, None] * stress_grad / GPa
+                    )  # 1/GPa = 160.21766208
                     output["stresses"] = stresses
 
         return output
