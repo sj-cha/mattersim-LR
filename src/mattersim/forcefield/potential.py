@@ -24,7 +24,6 @@ from torchmetrics import MeanMetric
 
 from mattersim.datasets.utils.build import build_dataloader
 from mattersim.forcefield.m3gnet.m3gnet import M3Gnet
-from mattersim.forcefield.m3gnet.m3gnet_multi_head import M3Gnet_multi_head
 from mattersim.jit_compile_tools.jit import compile_mode
 
 
@@ -1017,7 +1016,6 @@ class Potential(nn.Module):
         dir_name = os.path.dirname(save_path)
         if not os.path.exists(dir_name):
             os.makedirs(dir_name)
-        # 保存为单卡可加载的模型，多卡加载时需要先加载后放入DDP中
         checkpoint = {
             "model_name": self.model_name,
             "model": self.model.module.state_dict()
@@ -1037,40 +1035,42 @@ class Potential(nn.Module):
 
     @staticmethod
     def load(
-        model_name: str = "m3gnet",
         load_path: str = None,
+        *,
+        model_name: str = "m3gnet",
         device: str = "cuda" if torch.cuda.is_available() else "cpu",
         args: Dict = None,
         load_training_state: bool = True,
         **kwargs,
     ):
-        if load_path is None:
-            if model_name == "m3gnet":
-                print("Loading the pre-trained M3GNet model")
-                current_dir = os.path.dirname(__file__)
-                load_path = os.path.join(
-                    current_dir, "m3gnet/pretrained/mpf/best_model.pth"
-                )
-            elif model_name == "graphormer" or model_name == "geomformer":
-                raise NotImplementedError
-            else:
-                raise NotImplementedError
+        if model_name.lower() != "m3gnet":
+            raise NotImplementedError
+
+        current_dir = os.path.dirname(__file__)
+        if (
+            load_path is None
+            or load_path.lower() == "mattersim-v1.0.0-1m.pth"
+            or load_path.lower() == "mattersim-v1.0.0-1m"
+        ):
+            load_path = os.path.join(
+                current_dir, "..", "pretrained_models/mattersim-v1.0.0-1M.pth"
+            )
+            print(f"Loading the pre-trained {os.path.basename(load_path)} model")
+        elif (
+            load_path.lower() == "mattersim-v1.0.0-5m.pth"
+            or load_path.lower() == "mattersim-v1.0.0-5m"
+        ):
+            load_path = os.path.join(
+                current_dir, "..", "pretrained_models/mattersim-v1.0.0-5M.pth"
+            )
         else:
             print("Loading the model from %s" % load_path)
+        assert os.path.exists(load_path), f"Model file {load_path} not found"
 
         checkpoint = torch.load(load_path, map_location=device)
 
         assert checkpoint["model_name"] == model_name
-        if model_name == "m3gnet":
-            model = M3Gnet(device=device, **checkpoint["model_args"]).to(device)
-        elif model_name == "m3gnet_multi_head":
-            model = M3Gnet_multi_head(device=device, **checkpoint["model_args"]).to(
-                device
-            )
-        elif model_name == "graphormer" or model_name == "geomformer":
-            raise NotImplementedError
-        else:
-            raise NotImplementedError
+        model = M3Gnet(device=device, **checkpoint["model_args"]).to(device)
         model.load_state_dict(checkpoint["model"], strict=False)
 
         if load_training_state:
@@ -1124,73 +1124,6 @@ class Potential(nn.Module):
             model_name=model_name,
             last_epoch=last_epoch,
             validation_metrics=validation_metrics,
-            description=description,
-            **kwargs,
-        )
-
-    @staticmethod
-    def load_from_multi_head_model(
-        model_name: str = "m3gnet",
-        head_index: int = -1,
-        load_path: str = None,
-        device: str = "cuda" if torch.cuda.is_available() else "cpu",
-        **kwargs,
-    ):
-        """
-        Load one head of the multi-head model.
-        Args:
-            head_index:
-                -1: reset the head (final layer and
-                energy normalization module)
-        """
-        if load_path is None:
-            if model_name == "m3gnet":
-                print("Loading the pre-trained multi-head M3GNet model")
-                current_dir = os.path.dirname(__file__)
-                load_path = os.path.join(
-                    current_dir,
-                    "m3gnet/pretrained/Transition1x-MD17-MPF21-QM9-HME21-OC20/"
-                    "best_model.pth",
-                )
-            else:
-                raise NotImplementedError
-        else:
-            print("Loading the model from %s" % load_path)
-        if head_index == -1:
-            print("Reset the final layer and normalization module")
-        checkpoint = torch.load(load_path, map_location=device)
-        if model_name == "m3gnet":
-            model = M3Gnet(device=device, **checkpoint["model_args"]).to(
-                device
-            )  # noqa: E501
-            ori_ckpt = checkpoint["model"].copy()
-            for key in ori_ckpt:
-                if "final_layer_list" in key:
-                    if "final_layer_list.%d" % head_index in key:
-                        checkpoint["model"][
-                            key.replace("_layer_list.%d" % head_index, "")
-                        ] = ori_ckpt[key]
-                    del checkpoint["model"][key]
-                if "normalizer_list" in key:
-                    if "normalizer_list.%d" % head_index in key:
-                        checkpoint["model"][
-                            key.replace("_list.%d" % head_index, "")
-                        ] = ori_ckpt[key]
-                    del checkpoint["model"][key]
-                if "sph_2" in key:
-                    del checkpoint["model"][key]
-            model.load_state_dict(checkpoint["model"], strict=True)
-        else:
-            raise NotImplementedError
-        description = checkpoint["description"]
-        model.eval()
-
-        del checkpoint
-
-        return Potential(
-            model,
-            device=device,
-            model_name=model_name,
             description=description,
             **kwargs,
         )
