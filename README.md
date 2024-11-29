@@ -17,11 +17,45 @@
 MatterSim is a deep learning atomistic model across elements, temperatures and pressures.
 
 ## Installation
+### Install from PyPI
+> [!TIP]
+> While not mandatory, we recommend creating a clean conda environment before installing MatterSim to avoid potential package conflicts. You can create and activate a conda environment with the following commands:
+>
+> ```bash
+> # create the environment
+> conda create -n mattersim python=3.9
+>
+> # activate the environment
+> conda activate mattersim
+> ```
+>
+
+To install MatterSim, run the following command:
+```bash
+pip install mattersim
+```
+
+In case you want to install the package with the latest version, you can run the following command:
+
+```bash
+pip install git+https://github.com/microsoft/mattersim.git
+```
+
 ### Install from source code
+1. Download the source code of MatterSim and change to the directory
+
+```bash
+git clone git@github.com:microsoft/mattersim.git
+cd mattersim
+```
+
+2. Install MatterSim
+
 > [!WARNING]
 > We strongly recommend that users install MatterSim using [mamba or micromamba](https://mamba.readthedocs.io/en/latest/index.html), because *conda* can be significantly slower when resolving the dependencies in environment.yaml.
 
 To install the package, run the following command under the root of the folder:
+
 ```bash
 mamba env create -f environment.yaml
 mamba activate mattersim
@@ -37,11 +71,11 @@ from ase.build import bulk
 from ase.units import GPa
 from mattersim.forcefield import MatterSimCalculator
 
-device = "cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"
+device = "cuda" if torch.cuda.is_available() else "cpu"
 print(f"Running MatterSim on {device}")
 
 si = bulk("Si", "diamond", a=5.43)
-si.calc = MatterSimCalculator()
+si.calc = MatterSimCalculator(device=device)
 print(f"Energy (eV)                 = {si.get_potential_energy()}")
 print(f"Energy per atom (eV/atom)   = {si.get_potential_energy()/len(si)}")
 print(f"Forces of first atom (eV/A) = {si.get_forces()[0]}")
