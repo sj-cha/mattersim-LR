@@ -21,9 +21,11 @@ MatterSim is a deep learning atomistic model across elements, temperatures and p
 <details>
 <summary>Notes</summary>
 Although this is not mandatory, we recommend you to create a clean conda environment before attempting to install MatterSim. You can create a conda environment with the following command:
+
 ```bash
 # create the environment
 conda create -n mattersim python=3.9
+
 # activate the environment
 conda activate mattersim
 ```
