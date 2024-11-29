@@ -42,16 +42,24 @@ pip install git+https://github.com/microsoft/mattersim.git
 ```
 
 ### Install from source code
-> [!WARNING]
-> We strongly recommend that users install MatterSim using [mamba or micromamba](https://mamba.readthedocs.io/en/latest/index.html), because *conda* can be significantly slower when resolving the dependencies in environment.yaml.
+1. Download the source code of MatterSim and change to the directory
 
-To install the package, run the following command under the root of the folder:
-```bash
-mamba env create -f environment.yaml
-mamba activate mattersim
-pip install -e .
-python setup.py build_ext --inplace
-```
+    ```bash
+    git clone git@github.com:microsoft/mattersim.git
+    cd mattersim
+    ```
+
+2. Install MatterSim
+    > [!WARNING]
+    > We strongly recommend that users install MatterSim using [mamba or micromamba](https://mamba.readthedocs.io/en/latest/index.html), because *conda* can be significantly slower when resolving the dependencies in environment.yaml.
+
+    To install the package, run the following command under the root of the folder:
+    ```bash
+    mamba env create -f environment.yaml
+    mamba activate mattersim
+    pip install -e .
+    python setup.py build_ext --inplace
+    ```
 
 ## Usage
 ### A minimal test
