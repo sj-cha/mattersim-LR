@@ -31,8 +31,14 @@ MatterSim is a deep learning atomistic model across elements, temperatures and p
 >
 
 To install MatterSim, run the following command:
-```
+```bash
 pip install mattersim
+```
+
+In case you want to install the package with the latest version, you can run the following command:
+
+```bash
+pip install git+https://github.com/microsoft/mattersim.git
 ```
 
 ### Install from source code
