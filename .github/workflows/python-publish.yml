@@ -33,8 +33,8 @@ jobs:
       - name: Build release distributions
         run: |
           # NOTE: put your own distribution build steps here.
-          python -m pip install build
-          python -m build
+          python -m pip install build cibuildwheel
+          cibuildwheel --output-dir dist/
 
       - name: Upload distributions
         uses: actions/upload-artifact@v4
@@ -60,7 +60,7 @@ jobs:
       # ALTERNATIVE: if your GitHub Release name is the PyPI project version string
       # ALTERNATIVE: exactly, uncomment the following line instead:
       # url: https://pypi.org/project/YOURPROJECT/${{ github.event.release.name }}
-      # url: https://test.pypi.org/project/mattersim/${{ github.event.release.name }}
+      url: https://test.pypi.org/project/mattersim/${{ github.event.release.name }}
 
     steps:
       - name: Retrieve release distributions
