@@ -1117,7 +1117,7 @@ class MatterSimCalculator(Calculator):
         """
         super().__init__(**kwargs)
         if potential is None:
-            self.potential = Potential.load()
+            self.potential = Potential.load(device=device)
         else:
             self.potential = potential
         self.compute_stress = compute_stress
