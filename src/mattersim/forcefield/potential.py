@@ -18,6 +18,7 @@ from ase import Atoms
 from ase.calculators.calculator import Calculator
 from ase.constraints import full_3x3_to_voigt_6_stress
 from ase.units import GPa
+from deprecated import deprecated
 from torch.optim import Adam
 from torch.optim.lr_scheduler import ReduceLROnPlateau, StepLR
 from torch_ema import ExponentialMovingAverage
@@ -990,6 +991,7 @@ def batch_to_dict(graph_batch, model_type="m3gnet", device="cuda"):
     return input
 
 
+@deprecated(version="1.0.0", reason="Please use MatterSimCalculator instead.")
 class DeepCalculator(Calculator):
     """
     Deep calculator based on ase Calculator
