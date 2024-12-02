@@ -74,3 +74,11 @@ package-dir = {"" = "src"}
 [tool.setuptools.packages.find]
 where = ["src"]
 include = ["mattersim", "mattersim.*"]
+
+[tool.cibuildwheel]
+# Limit the build to Python 3.9
+build = "cp39-*"
+# Limit the build to manylinux
+manylinux-x86_64-image = "manylinux2014"
+# Include pure Python (none) wheels
+skip = "pp*,cp3{6,7,8,10,11}-*,*win*,*macos*"
