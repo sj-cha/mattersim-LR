@@ -60,7 +60,7 @@ jobs:
       # ALTERNATIVE: if your GitHub Release name is the PyPI project version string
       # ALTERNATIVE: exactly, uncomment the following line instead:
       # url: https://pypi.org/project/YOURPROJECT/${{ github.event.release.name }}
-      url: https://test.pypi.org/project/mattersim/${{ github.event.release.name }}-rc
+      url: https://test.pypi.org/project/mattersim-test/${{ github.event.release.name }}-rc
 
     steps:
       - name: Retrieve release distributions
