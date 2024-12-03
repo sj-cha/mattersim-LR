@@ -850,7 +850,103 @@ class Potential(nn.Module):
         }
         torch.save(checkpoint, save_path)
 
-    @staticmethod
+    @classmethod
+    def from_checkpoint(
+        cls,
+        load_path: str = None,
+        *,
+        model_name: str = "m3gnet",
+        device: str = "cuda" if torch.cuda.is_available() else "cpu",
+        load_training_state: bool = True,
+        **kwargs,
+    ):
+        if model_name.lower() != "m3gnet":
+            raise NotImplementedError
+
+        current_dir = os.path.dirname(__file__)
+        if (
+            load_path is None
+            or load_path.lower() == "mattersim-v1.0.0-1m.pth"
+            or load_path.lower() == "mattersim-v1.0.0-1m"
+        ):
+            load_path = os.path.join(
+                current_dir, "..", "pretrained_models/mattersim-v1.0.0-1M.pth"
+            )
+            logger.info(f"Loading the pre-trained {os.path.basename(load_path)} model")
+        elif (
+            load_path.lower() == "mattersim-v1.0.0-5m.pth"
+            or load_path.lower() == "mattersim-v1.0.0-5m"
+        ):
+            load_path = os.path.join(
+                current_dir, "..", "pretrained_models/mattersim-v1.0.0-5M.pth"
+            )
+            logger.info(f"Loading the pre-trained {os.path.basename(load_path)} model")
+        else:
+            logger.info("Loading the model from %s" % load_path)
+        assert os.path.exists(load_path), f"Model file {load_path} not found"
+
+        checkpoint = torch.load(load_path, map_location=device)
+
+        assert checkpoint["model_name"] == model_name
+        model = M3Gnet(device=device, **checkpoint["model_args"]).to(device)
+        model.load_state_dict(checkpoint["model"], strict=False)
+
+        if load_training_state:
+            optimizer = Adam(model.parameters())
+            scheduler = StepLR(optimizer, step_size=10, gamma=0.95)
+            try:
+                optimizer.load_state_dict(checkpoint["optimizer"])
+            except BaseException:
+                try:
+                    optimizer.load_state_dict(checkpoint["optimizer"].state_dict())
+                except BaseException:
+                    optimizer = None
+            try:
+                scheduler.load_state_dict(checkpoint["scheduler"])
+            except BaseException:
+                try:
+                    scheduler.load_state_dict(checkpoint["scheduler"].state_dict())
+                except BaseException:
+                    scheduler = "StepLR"
+            try:
+                last_epoch = checkpoint["last_epoch"]
+                validation_metrics = checkpoint["validation_metrics"]
+                description = checkpoint["description"]
+            except BaseException:
+                last_epoch = -1
+                validation_metrics = {"loss": 0.0}
+                description = ""
+            try:
+                ema = ExponentialMovingAverage(model.parameters(), decay=0.99)
+                ema.load_state_dict(checkpoint["ema"])
+            except BaseException:
+                ema = None
+        else:
+            optimizer = None
+            scheduler = "StepLR"
+            last_epoch = -1
+            validation_metrics = {"loss": 0.0}
+            description = ""
+            ema = None
+
+        model.eval()
+
+        del checkpoint
+
+        return cls(
+            model,
+            optimizer=optimizer,
+            ema=ema,
+            scheduler=scheduler,
+            device=device,
+            model_name=model_name,
+            last_epoch=last_epoch,
+            validation_metrics=validation_metrics,
+            description=description,
+            **kwargs,
+        )
+
+    @deprecated(version="1.0.0", reason="Please use from_checkpoint instead.")
     def load(
         load_path: str = None,
         *,
@@ -880,6 +976,7 @@ class Potential(nn.Module):
             load_path = os.path.join(
                 current_dir, "..", "pretrained_models/mattersim-v1.0.0-5M.pth"
             )
+            logger.info(f"Loading the pre-trained {os.path.basename(load_path)} model")
         else:
             logger.info("Loading the model from %s" % load_path)
         assert os.path.exists(load_path), f"Model file {load_path} not found"
@@ -1022,6 +1119,15 @@ class DeepCalculator(Calculator):
         self.args_dict = args_dict
         self.device = device
 
+    @classmethod
+    def from_checkpoint(cls, load_path: str, **kwargs):
+        potential = Potential.from_checkpoint(load_path, **kwargs)
+        return cls(potential, **kwargs)
+
+    @classmethod
+    def from_potential(cls, potential: Potential, **kwargs):
+        return cls(potential, **kwargs)
+
     def calculate(
         self,
         atoms: Optional[Atoms] = None,
@@ -1117,7 +1223,7 @@ class MatterSimCalculator(Calculator):
         """
         super().__init__(**kwargs)
         if potential is None:
-            self.potential = Potential.load(device=device)
+            self.potential = Potential.from_checkpoint(device=device, **kwargs)
         else:
             self.potential = potential
         self.compute_stress = compute_stress
@@ -1125,7 +1231,18 @@ class MatterSimCalculator(Calculator):
         self.args_dict = args_dict
         self.device = device
 
-    @staticmethod
+    @classmethod
+    def from_checkpoint(cls, load_path: str, **kwargs):
+        potential = Potential.from_checkpoint(load_path, **kwargs)
+        return cls(potential=potential, **kwargs)
+
+    @classmethod
+    def from_potential(cls, potential: Potential, **kwargs):
+        return cls(potential=potential, **kwargs)
+
+    @deprecated(
+        version="1.0.0", reason="Plase use from_checkpoint or from_potential instead."
+    )
     def load(
         load_path: str = None,
         *,
