@@ -1,10 +1,10 @@
 [build-system]
-requires = ["setuptools>=45", "wheel", "Cython>=0.29.32", "numpy<2"]
+requires = ["setuptools>=45", "wheel", "Cython>=0.29.32", "numpy<2", "setuptools_scm"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "mattersim"
-version = "1.0.0"
+dynamic = ["version"]
 description = "MatterSim: A Deep Learning Atomistic Model Across Elements, Temperatures and Pressures."
 authors = [
     {name = "Han Yang", email = "hanyang@microsoft.com"},
@@ -74,3 +74,15 @@ package-dir = {"" = "src"}
 [tool.setuptools.packages.find]
 where = ["src"]
 include = ["mattersim", "mattersim.*"]
+
+[tool.setuptools_scm]
+version_scheme = "guess-next-dev"
+local_scheme = "dirty-tag"
+
+[tool.cibuildwheel]
+# Limit the build to Python 3.9
+build = "cp39-*"
+# Limit the build to manylinux
+manylinux-x86_64-image = "manylinux2014"
+# Include pure Python (none) wheels
+skip = "pp*,cp3{6,7,8,10,11}-*,*win*,*macos*"
