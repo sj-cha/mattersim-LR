@@ -1180,8 +1180,23 @@ class DeepCalculator(Calculator):
 
         self.args_dict["batch_size"] = 1
         self.args_dict["only_inference"] = 1
+        cutoff = (
+            self.potential.model.model_args["cutoff"]
+            if self.potential.model_name == "m3gnet"
+            else 5.0
+        )
+        threebody_cutoff = (
+            self.potential.model.model_args["threebody_cutoff"]
+            if self.potential.model_name == "m3gnet"
+            else 4.0
+        )
+
         dataloader = build_dataloader(
-            [atoms], model_type=self.potential.model_name, **self.args_dict
+            [atoms],
+            model_type=self.potential.model_name,
+            cutoff=cutoff,
+            threebody_cutoff=threebody_cutoff,
+            **self.args_dict,
         )
         for graph_batch in dataloader:
             # Resemble input dictionary
@@ -1323,8 +1338,23 @@ class MatterSimCalculator(Calculator):
 
         self.args_dict["batch_size"] = 1
         self.args_dict["only_inference"] = 1
+        cutoff = (
+            self.potential.model.model_args["cutoff"]
+            if self.potential.model_name == "m3gnet"
+            else 5.0
+        )
+        threebody_cutoff = (
+            self.potential.model.model_args["threebody_cutoff"]
+            if self.potential.model_name == "m3gnet"
+            else 4.0
+        )
+
         dataloader = build_dataloader(
-            [atoms], model_type=self.potential.model_name, **self.args_dict
+            [atoms],
+            model_type=self.potential.model_name,
+            cutoff=cutoff,
+            threebody_cutoff=threebody_cutoff,
+            **self.args_dict,
         )
         for graph_batch in dataloader:
             # Resemble input dictionary
