@@ -70,7 +70,6 @@ To install the package, run the following command under the root of the folder:
 mamba env create -f environment.yaml
 mamba activate mattersim
 uv pip install -e .
-python setup.py build_ext --inplace
 ```
 
 ## Pre-trained Models
