@@ -28,6 +28,9 @@ def moldyn(
     save_csv: str = "results.csv.gz",
     **kwargs,
 ) -> dict:
+    if len(atoms_list) != 1:
+        raise ValueError("molecular dynamics workflow currently only supports one structure")
+
     moldyn_results = defaultdict(list)
 
     for atoms in atoms_list:
@@ -71,6 +74,12 @@ def moldyn(
         if not os.path.exists(work_dir):
             os.makedirs(work_dir)
 
+        if os.path.exists(os.path.join(work_dir, logfile)):
+            os.remove(os.path.join(work_dir, logfile))
+
+        if os.path.exists(os.path.join(work_dir, trajectory)):
+            os.remove(os.path.join(work_dir, trajectory))
+
         md = MolecularDynamics(
             atoms,
             ensemble=ensemble,
@@ -89,8 +98,6 @@ def moldyn(
         df = pd.read_csv(
             os.path.join(work_dir, logfile),
             sep="\\s+",
-            names=["time", "temperature", "energy", "pressure"],
-            skipfooter=1,
         )
         df.columns = list(
             map(lambda x: re.sub(r"\[.*?\]", "", x).strip().lower(), df.columns)
@@ -109,6 +116,6 @@ def moldyn(
         # Save the DataFrame to a CSV file
         df.to_csv(os.path.join(work_dir, save_csv))
 
-        moldyn_results = df.to_dict()
+        moldyn_results = df
 
     return moldyn_results
