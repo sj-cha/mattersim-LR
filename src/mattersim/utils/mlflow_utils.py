@@ -82,8 +82,9 @@ class MatterSimModelWrapper(mlflow.pyfunc.PythonModel):
         with tempfile.TemporaryDirectory() as td:
             data["work_dir"] = td
 
-        df = wrapper(atoms_list, **data)
-        output = json.loads(df.to_json(orient="records"))
+            df = wrapper(atoms_list, **data)
+            output = json.loads(df.to_json(orient="records"))
+
         # print(f"Output:\n{output}")
         return output
 
