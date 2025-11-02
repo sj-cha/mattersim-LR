@@ -49,8 +49,8 @@ class EwaldPotential(nn.Module):
 
     def forward(self, data: Dict[str, torch.Tensor], **kwargs):
         if data["batch"] is None:
-            n_nodes = data['positions'].shape[0]
-            batch_now = torch.zeros(n_nodes, dtype=torch.int64, device=data['positions'].device)
+            n_nodes = data['atom_pos'].shape[0]
+            batch_now = torch.zeros(n_nodes, dtype=torch.int64, device=data['atom_pos'].device)
         else:
             batch_now = data["batch"]
 
@@ -62,7 +62,7 @@ class EwaldPotential(nn.Module):
         
         # box = data['cell'].view(-1, 3, 3).diagonal(dim1=-2, dim2=-1)
         box = data['cell'].view(-1, 3, 3)
-        r = data['positions']
+        r = data['atom_pos']
         q = data[self.feature_key]
         if q.dim() == 1:
             q = q.unsqueeze(1)

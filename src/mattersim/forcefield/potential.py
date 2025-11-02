@@ -48,6 +48,7 @@ class Potential(nn.Module):
         ema=None,
         device: str = "cuda" if torch.cuda.is_available() else "cpu",
         allow_tf32=False,
+        long_range: bool = False,
         **kwargs,
     ):
         """
@@ -107,6 +108,7 @@ class Potential(nn.Module):
         self.rank = None
 
         self.use_finetune_label_loss = kwargs.get("use_finetune_label_loss", False)
+        self.long_range = long_range
 
     def freeze_reset_model(
         self,
@@ -489,6 +491,8 @@ class Potential(nn.Module):
         energies = []
         forces = []
         stresses = []
+        if self.long_range:
+            charges = []
         for batch_idx, graph_batch in enumerate(dataloader):
             if self.model_name == "graphormer" or self.model_name == "geomformer":
                 raise NotImplementedError
@@ -514,8 +518,13 @@ class Potential(nn.Module):
                         forces.append(np.array(atomic_force))
                 if include_stresses:
                     stresses.extend(list(result["stresses"].cpu().detach().numpy()))
+                if self.long_range:
+                    charges.extend(list(result["charges"].cpu().detach().numpy()))
 
-        return (energies, forces, stresses)
+        if self.long_range:
+            return (energies, forces, stresses, charges)
+        else:
+            return (energies, forces, stresses)
 
     # ============================
 
@@ -766,8 +775,10 @@ class Potential(nn.Module):
                 )
                 volume = torch.linalg.det(input["cell"])
 
-            energies = self.model.forward(input, dataset_idx)
+            energies, charges = self.model.forward(input, dataset_idx)
             output["total_energy"] = energies
+            if self.long_range:
+                output["charges"] = charges
 
             # Only take first derivative if only force is required
             if include_forces is True and include_stresses is False:
@@ -853,6 +864,7 @@ class Potential(nn.Module):
         model_name: str = "m3gnet",
         device: str = "cuda" if torch.cuda.is_available() else "cpu",
         load_training_state: bool = True,
+        long_range: bool = False,
         **kwargs,
     ):
         if model_name.lower() != "m3gnet":
@@ -897,7 +909,7 @@ class Potential(nn.Module):
 
         assert checkpoint["model_name"] == model_name
         checkpoint["model_args"].update(kwargs)
-        model = M3Gnet(device=device, **checkpoint["model_args"]).to(device)
+        model = M3Gnet(device=device, long_range=long_range, **checkpoint["model_args"]).to(device)
         model.load_state_dict(checkpoint["model"], strict=False)
 
         if load_training_state:
@@ -952,6 +964,7 @@ class Potential(nn.Module):
             last_epoch=last_epoch,
             validation_metrics=validation_metrics,
             description=description,
+            long_range=long_range,
             **kwargs,
         )
 

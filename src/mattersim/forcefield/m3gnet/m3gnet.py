@@ -16,7 +16,7 @@ from .modules import (  # noqa: F501
     SphericalBasisLayer,
 )
 from .scaling import AtomScaling
-
+from .modules.ewald import EwaldPotential
 
 @compile_mode("script")
 class M3Gnet(nn.Module):
@@ -34,6 +34,7 @@ class M3Gnet(nn.Module):
         device: str = "cuda" if torch.cuda.is_available() else "cpu",
         max_z: int = 94,
         threebody_cutoff: float = 4.0,
+        long_range: bool = False,
         **kwargs,
     ):
         super().__init__()
@@ -52,6 +53,13 @@ class M3Gnet(nn.Module):
             out_dims=[units, units, 1],
             activation=["swish", "swish", None],
         )
+        self.long_range = long_range
+        if self.long_range:
+            self.MLP_charge = GatedMLP(
+                in_dim=units,
+                out_dims=[units, units, 1],
+                activation=["swish", "swish", None],
+            )
         self.apply(self.init_weights)
         self.atom_embedding = MLP(
             in_dim=max_z + 1, out_dims=[units], activation=None, use_bias=False
@@ -69,6 +77,7 @@ class M3Gnet(nn.Module):
             "max_z": max_z,
             "threebody_cutoff": threebody_cutoff,
         }
+        self.ewald = EwaldPotential()
 
     def forward(
         self,
@@ -143,7 +152,16 @@ class M3Gnet(nn.Module):
         energies_i = self.normalizer(energies_i, atomic_numbers)
         energies = scatter(energies_i, batch, dim=0, dim_size=num_graphs)
 
-        return energies  # [batch_size]
+        if self.long_range:
+            charges = self.MLP_charge(atom_attr).view(-1)  # [batch_size*num_atoms]
+            input["q"] = charges.unsqueeze(-1)
+            data = self.ewald(input)
+            ewald_energies = data["ewald_potential"]
+            energies += ewald_energies
+        else:
+            charges = None
+
+        return energies, charges
 
     def init_weights(self, m):
         if isinstance(m, nn.Linear):
