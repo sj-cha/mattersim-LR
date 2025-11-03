@@ -158,10 +158,10 @@ class M3Gnet(nn.Module):
             data = self.ewald(input)
             ewald_energies = data["ewald_potential"]
             energies += ewald_energies
-        else:
-            charges = None
 
-        return energies, charges
+            return energies, charges
+        else:
+            return energies
 
     def init_weights(self, m):
         if isinstance(m, nn.Linear):
