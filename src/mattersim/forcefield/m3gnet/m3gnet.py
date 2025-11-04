@@ -154,14 +154,16 @@ class M3Gnet(nn.Module):
 
         if self.long_range:
             charges = self.MLP_charge(atom_attr).view(-1)  # [batch_size*num_atoms]
+            total_charges = scatter(charges, batch, dim=0, dim_size=num_graphs, reduce='sum')
             input["q"] = charges.unsqueeze(-1)
             data = self.ewald(input)
             ewald_energies = data["ewald_potential"]
             energies += ewald_energies
-
-            return energies, charges
         else:
-            return energies
+            charges = None
+            total_charges = None
+
+        return energies, charges, total_charges
 
     def init_weights(self, m):
         if isinstance(m, nn.Linear):

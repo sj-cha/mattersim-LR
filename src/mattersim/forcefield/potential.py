@@ -102,7 +102,7 @@ class Potential(nn.Module):
         )
         self.last_epoch = kwargs.get("last_epoch", -1)
         self.description = kwargs.get("description", "")
-        self.saved_name = ["loss", "MAE_energy", "MAE_force", "MAE_stress"]
+        self.saved_name = ["loss", "MAE_energy", "MAE_force", "MAE_stress", "MAE_charge"]
         self.best_metric = 10000
         self.best_metric_epoch = 0
         self.rank = None
@@ -195,6 +195,7 @@ class Potential(nn.Module):
         include_stresses: bool = False,
         force_loss_ratio: float = 1.0,
         stress_loss_ratio: float = 0.1,
+        charge_loss_ratio: float = 1.0,
         epochs: int = 100,
         early_stop_patience: int = 100,
         metric_name: str = "val_loss",
@@ -231,7 +232,7 @@ class Potential(nn.Module):
             need_to_load_data: whether to load data from disk
 
         """
-        self.idx = ["val_loss", "val_mae_e", "val_mae_f", "val_mae_s"].index(
+        self.idx = ["val_loss", "val_mae_e", "val_mae_f", "val_mae_s", "val_mae_c"].index(
             metric_name
         )
         if is_distributed:
@@ -282,6 +283,7 @@ class Potential(nn.Module):
                         include_stresses,
                         force_loss_ratio,
                         stress_loss_ratio,
+                        charge_loss_ratio,
                         wandb,
                         is_distributed,
                         mode="train",
@@ -300,6 +302,7 @@ class Potential(nn.Module):
                     include_stresses,
                     force_loss_ratio,
                     stress_loss_ratio,
+                    charge_loss_ratio,
                     wandb,
                     is_distributed,
                     mode="train",
@@ -315,6 +318,7 @@ class Potential(nn.Module):
                     include_stresses,
                     force_loss_ratio,
                     stress_loss_ratio,
+                    charge_loss_ratio,
                     wandb,
                     is_distributed,
                     mode="val",
@@ -333,6 +337,7 @@ class Potential(nn.Module):
                 "MAE_energy": metric[1],
                 "MAE_force": metric[2],
                 "MAE_stress": metric[3],
+                "MAE_charge": metric[4],
             }
             if is_distributed:
                 if self.save_model_ddp(
@@ -377,10 +382,11 @@ class Potential(nn.Module):
                     "val_mae_e",
                     "val_mae_f",
                     "val_mae_s",
+                    "val_mae_c",
                 ], (
                     f"`{metric_name}` metric name not supported. "
                     "supported metrics: `val_loss`, `val_mae_e`, "
-                    "`val_mae_f`, `val_mae_s`"
+                    "`val_mae_f`, `val_mae_s`, `val_mae_c`"
                 )
 
                 if (
@@ -421,10 +427,11 @@ class Potential(nn.Module):
                 "val_mae_e",
                 "val_mae_f",
                 "val_mae_s",
+                "val_mae_c"
             ], (  # noqa: E501
                 f"`{metric_name}` metric name not supported. "
                 "supported metrics: `val_loss`, `val_mae_e`, "
-                "`val_mae_f`, `val_mae_s`"
+                "`val_mae_f`, `val_mae_s`, `val_mae_c`"
             )
             # Loading on multiple GPUs is too time consuming,
             # so this operation should not be performed.
@@ -468,6 +475,7 @@ class Potential(nn.Module):
             include_stresses,
             1.0,
             0.1,
+            1.0,
             wandb=wandb,
             mode="val",
             **kwargs,
@@ -493,6 +501,7 @@ class Potential(nn.Module):
         stresses = []
         if self.long_range:
             charges = []
+            total_charges = []
         for batch_idx, graph_batch in enumerate(dataloader):
             if self.model_name == "graphormer" or self.model_name == "geomformer":
                 raise NotImplementedError
@@ -520,9 +529,10 @@ class Potential(nn.Module):
                     stresses.extend(list(result["stresses"].cpu().detach().numpy()))
                 if self.long_range:
                     charges.extend(list(result["charges"].cpu().detach().numpy()))
+                    total_charges.extend(list(result["total_charges"].cpu().detach().numpy()))
 
         if self.long_range:
-            return (energies, forces, stresses, charges)
+            return (energies, forces, stresses, charges, total_charges)
         else:
             return (energies, forces, stresses)
 
@@ -538,6 +548,7 @@ class Potential(nn.Module):
         include_stresses,
         loss_f,
         loss_s,
+        loss_c,
         wandb,
         is_distributed=False,
         mode="train",
@@ -549,6 +560,7 @@ class Potential(nn.Module):
         train_e_mae = MeanMetric().to(self.device)
         train_f_mae = MeanMetric().to(self.device)
         train_s_mae = MeanMetric().to(self.device)
+        train_c_mae = MeanMetric().to(self.device)
 
         # scaler = torch.cuda.amp.GradScaler()
 
@@ -577,7 +589,7 @@ class Potential(nn.Module):
                         include_stresses=include_stresses,
                     )
 
-            loss_, e_mae, f_mae, s_mae = self.loss_calc(
+            loss_, e_mae, f_mae, s_mae, c_mae = self.loss_calc(
                 graph_batch,
                 result,
                 loss,
@@ -586,6 +598,7 @@ class Potential(nn.Module):
                 include_stresses,
                 loss_f,
                 loss_s,
+                loss_c,
             )
 
             # loss backward
@@ -608,6 +621,8 @@ class Potential(nn.Module):
                 train_f_mae.update(f_mae.detach())
             if include_stresses:
                 train_s_mae.update(s_mae.detach())
+            if self.long_range:
+                train_c_mae.update(c_mae.detach())
 
         loss_avg_ = loss_avg.compute().item()
         if include_energy:
@@ -622,16 +637,22 @@ class Potential(nn.Module):
             s_mae = train_s_mae.compute().item()
         else:
             s_mae = 0
+        if self.long_range:
+            c_mae = train_c_mae.compute().item()
+        else:
+            c_mae = 0
+
 
         if log:
             logger.info(
-                "%s: Loss: %.4f, MAE(e): %.4f, MAE(f): %.4f, MAE(s): %.4f, Time: %.2fs, lr: %.8f\n"  # noqa: E501
+                "%s: Loss: %.4f, MAE(e): %.4f, MAE(f): %.4f, MAE(s): %.4f, MAE(c): %.4f, Time: %.2fs, lr: %.8f\n"  # noqa: E501
                 % (
                     mode,
                     loss_avg.compute().item(),
                     e_mae,
                     f_mae,
                     s_mae,
+                    c_mae,
                     time.time() - start_time,
                     self.scheduler.get_last_lr()[0],
                 ),
@@ -644,13 +665,14 @@ class Potential(nn.Module):
                     f"{mode}/mae_e": e_mae,
                     f"{mode}/mae_f": f_mae,
                     f"{mode}/mae_s": s_mae,
+                    f"{mode}/mae_c": c_mae,
                     f"{mode}/lr": self.scheduler.get_last_lr()[0],
-                    f"{mode}/mae_tot": e_mae + f_mae + s_mae,
+                    f"{mode}/mae_tot": e_mae + f_mae + s_mae + c_mae,
                 },
                 step=epoch,
             )
 
-        return (loss_avg_, e_mae, f_mae, s_mae)
+        return (loss_avg_, e_mae, f_mae, s_mae, c_mae)
 
     def loss_calc(
         self,
@@ -662,10 +684,12 @@ class Potential(nn.Module):
         include_stresses,
         loss_f=1.0,
         loss_s=0.1,
+        loss_c=1.0
     ):
         e_mae = 0.0
         f_mae = 0.0
         s_mae = 0.0
+        c_mae = 0.0
         loss_ = torch.tensor(0.0, device=self.device, requires_grad=True)
 
         if self.model_name == "graphormer" or self.model_name == "geomformer":
@@ -688,7 +712,12 @@ class Potential(nn.Module):
                 loss_ = loss_ + loss(s_pred, s_gt) * loss_s
                 s_mae = torch.nn.L1Loss()(s_pred, s_gt)
                 # s_mae = torch.mean(torch.abs((s_pred - s_gt))).item()
-        return loss_, e_mae, f_mae, s_mae
+            if self.long_range:
+                c_pred = result["total_charges"]
+                target = torch.zeros_like(c_pred)
+                loss_ = loss_ + loss(c_pred, target) * loss_c
+                c_mae = torch.nn.L1Loss()(c_pred, target)
+        return loss_, e_mae, f_mae, s_mae, c_mae
 
     def get_properties(
         self,
@@ -775,10 +804,11 @@ class Potential(nn.Module):
                 )
                 volume = torch.linalg.det(input["cell"])
 
-            energies, charges = self.model.forward(input, dataset_idx)
+            energies, charges, total_charges = self.model.forward(input, dataset_idx)
             output["total_energy"] = energies
             if self.long_range:
                 output["charges"] = charges
+                output["total_charges"] = total_charges
 
             # Only take first derivative if only force is required
             if include_forces is True and include_stresses is False:
