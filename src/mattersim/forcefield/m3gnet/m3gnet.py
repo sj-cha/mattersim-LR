@@ -153,7 +153,16 @@ class M3Gnet(nn.Module):
         energies = scatter(energies_i, batch, dim=0, dim_size=num_graphs)
 
         if self.long_range:
-            charges = self.MLP_charge(atom_attr).view(-1)  # [batch_size*num_atoms]
+            _charges = self.MLP_charge(atom_attr).view(-1)  # [batch_size*num_atoms]
+            sum_q = scatter(_charges, batch, dim=0, dim_size=num_graphs)
+            cnt_q  = scatter(torch.ones_like(_charges), batch, dim=0, dim_size=num_graphs)  
+            mean_q = sum_q / cnt_q 
+            mean_q_per_atom = mean_q[batch] 
+
+            charges = _charges - mean_q_per_atom  
+            total_charges = scatter(charges, batch, dim=0, dim_size=num_graphs)
+            print("Total charges:\t", total_charges)
+
             input["q"] = charges.unsqueeze(-1)
             data = self.ewald(input)
             ewald_energies = data["ewald_potential"]
