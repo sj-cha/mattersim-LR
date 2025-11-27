@@ -160,8 +160,6 @@ class M3Gnet(nn.Module):
             mean_q_per_atom = mean_q[batch] 
 
             charges = _charges - mean_q_per_atom  
-            total_charges = scatter(charges, batch, dim=0, dim_size=num_graphs)
-            print("Total charges:\t", total_charges)
 
             input["q"] = charges.unsqueeze(-1)
             data = self.ewald(input)

@@ -775,10 +775,13 @@ class Potential(nn.Module):
                 )
                 volume = torch.linalg.det(input["cell"])
 
-            energies, charges = self.model.forward(input, dataset_idx)
-            output["total_energy"] = energies
             if self.long_range:
+                energies, charges = self.model.forward(input, dataset_idx)
                 output["charges"] = charges
+            else:
+                energies = self.model.forward(input, dataset_idx)
+
+            output["total_energy"] = energies            
 
             # Only take first derivative if only force is required
             if include_forces is True and include_stresses is False:
