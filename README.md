@@ -39,7 +39,10 @@ Soft constraint method utilizes the loss function to enforce charge neutrality.
 Hard constraint method involves the subtraction of mean predicted charges to enforce zero sum. 
 
 ## Summary
-We find that the **hard constraint method works better** in terms of the physical meaningfulness of the predicted atomic charges. For the water systems, it has correctly produced positive charges for H atoms and negative charges for O atoms, with the magnitude ratio of 2:1. We also demonstrate the molecular dynamics performance of the `mattersim-LES` on the Zn ion solvation system, which correctly reproduced the coordination number and the Zn-O radial distribution function against the reported DFT baseline. 
+<p align="center">
+<img src="charges.png" alt="charge distribution" width="500">
+</p>
+We find that the **hard constraint method works better** in terms of the physical meaningfulness of the predicted atomic charges. For the water systems, it has correctly produced positive charges for H atoms and negative charges for O atoms, with the magnitude ratio of 1:2 expected in a water molecule. We also demonstrate the molecular dynamics performance of the `mattersim-LES` on the Zn ion solvation system, which correctly reproduced the coordination number and the Zn-O radial distribution function against the reported DFT baseline. 
 
 Results and visualizations can be found in jupyter notebooks in the `/water` folder.
 
